@@ -1,0 +1,158 @@
+import datetime
+import os.path
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from bs4 import BeautifulSoup
+
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
+
+
+def generate_conference_html(event):
+    solution = event.get('conferenceData', {}).get('conferenceSolution', {})
+    if solution:
+        soup = BeautifulSoup(features='html.parser')
+        content_div = soup.new_tag("div", id="content")
+        text_span = soup.new_tag("span")
+        text_span.string = "Join " + solution.get('name', '')
+        icon_img = soup.new_tag("img", src=solution.get('iconUri', ''))
+        content_div.append(icon_img)
+        content_div.append(text_span)
+        return str(content_div)
+    else:
+        return "Conference details are not available."
+
+
+def main():
+    """Shows basic usage of the Google Calendar API.
+    Prints the start and name of the next 10 events on the user's calendar.
+    """
+    creds = None
+    # The file token.json stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "credentials.json", SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+
+    try:
+        service = build("calendar", "v3", credentials=creds)
+
+        # Call the Calendar API
+        now = datetime.datetime.utcnow().isoformat() + "Z"  # 'Z' indicates UTC time
+        print("Getting the upcoming 10 events")
+        events_result = (
+            service.events()
+            .list(
+                calendarId="primary",
+                timeMin=now,
+                maxResults=10,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
+        events = events_result.get("items", [])
+
+        if not events:
+            print("No upcoming events found.")
+            return
+
+        # Prints the start and name of the next 10 events
+        for event in events:
+            start = event["start"].get("dateTime", event["start"].get("date"))
+            print(start, event["summary"])
+
+        # Create event with conference data
+        event = {
+            'summary': 'VITOL Quiz',
+            'location': 'Room No-319,A Block,VIT Chennai',
+            'description': 'Essence of traditional knowledge_BSSC101N_B21_B22_B23_WS 23-24',
+            'start': {
+                'dateTime': '2024-02-21T19:30:00+05:30',
+                'timeZone': 'Asia/Kolkata',
+            },
+            'end': {
+                'dateTime': '2024-02-21T20:00:00+05:30',
+                'timeZone': 'Asia/Kolkata',
+            },
+            'recurrence': [
+                'RRULE:FREQ=WEEKLY;COUNT=7'
+            ],
+            'attendees': [
+                {'email': 'snehbhagat12@gmail.com'},
+                {'email': 'snehkumar.bhagat2022@vitstudent.ac.in'},
+            ],
+            'reminders': {
+                'useDefault': False,
+                'overrides': [
+                    {'method': 'email', 'minutes': 30},
+                    {'method': 'popup', 'minutes': 10},
+                ],
+            },
+            'conferenceData': {
+                'createRequest': {
+                    'requestId': '23jdkfndj1AD',
+                    'conferenceSolution': {
+                        'name': 'GoogleMeet',
+                        'iconUri': 'https://www.shutterstock.com/image-vector/business-meeting-icon-vector-eps-260nw-1534810196.jpg'
+                    },
+                }
+            }
+        }
+
+        event = service.events().insert(calendarId='primary', body=event, sendNotifications=True).execute()
+        print(f"Event Created {event.get('htmlLink')}")
+      # Define notification settings
+        def update_event_notifications(event):
+          notification_settings = {
+              'useDefault': False,
+              'overrides': [
+                {'method': 'email', 'minutes': 10},
+                {'method': 'popup', 'minutes': 10},
+              ],
+          }
+
+          # Update event with notification settings
+          updated_event = service.events().patch(
+            calendarId='primary',
+            eventId=event['id'],
+            body={'reminders': notification_settings}
+          ).execute()
+
+          print(f'Notifications updated for event: {updated_event["summary"]}')
+
+        # Retrieve list of events from calendar
+          events_result = service.events().list(calendarId='primary').execute()
+          events = events_result.get('items', [])
+
+# Iterate over events and update notifications
+        if not events:
+          print('No events found.')
+        else:
+            for event in events:
+                update_event_notifications(event)
+
+            # Generate the HTML content for the conference details
+            conference_html = generate_conference_html(event)
+            print(conference_html)
+
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+
+
+if __name__ == "__main__":
+    main()

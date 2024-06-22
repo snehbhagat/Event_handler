@@ -1,0 +1,31 @@
+ClientID-424685218724-vpsn4cqqq63sr6ivoi7qh6s90mk2nvfv.apps.googleusercontent.com
+ClientSecret-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
+'''def update_event_notifications(event):
+      # Define notification settings
+      notification_settings = {
+          'useDefault': False,
+          'overrides': [
+              {'method': 'email', 'minutes': 10},
+              {'method': 'popup', 'minutes': 10},
+          ],
+      }
+
+    # Update event with notification settings
+      updated_event = service.events().patch(
+          calendarId='primary',
+          eventId=event['id'],
+          body={'reminders': notification_settings}
+      ).execute()
+    
+      print(f'Notifications updated for event: {updated_event["summary"]}')
+
+# Retrieve list of events from calendar
+    events_result = service.events().list(calendarId='primary').execute()
+    events = events_result.get('items', [])
+
+# Iterate over events and update notifications
+    if not events:
+      print('No events found.')
+    else:
+        for event in events:
+            update_event_notifications(event)''
